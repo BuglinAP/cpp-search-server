@@ -239,7 +239,8 @@ private:
                 {
                     query.minus_words.insert(query_word.data);
                 }
-                else {
+                else 
+                {
                     query.plus_words.insert(query_word.data);
                 }
             }
@@ -266,9 +267,8 @@ private:
             const double inverse_document_freq = ComputeWordInverseDocumentFreq(word);
             for (const auto [document_id, term_freq] : word_to_document_freqs_.at(word))
             {
-                DocumentStatus document_status = documents_.at(document_id).status;
-                int document_rating = documents_.at(document_id).rating;
-                if (document_filter(document_id, document_status, document_rating))
+                DocumentData document_at = documents_.at(document_id);
+                if (document_filter(document_id, document_at.status, document_at.rating))
                 {
                     document_to_relevance[document_id] += term_freq * inverse_document_freq;
                 }
