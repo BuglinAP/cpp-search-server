@@ -6,6 +6,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <numeric>
 
 using namespace std;
 
@@ -91,7 +92,7 @@ public:
         documents_.emplace(document_id, DocumentData{ ComputeAverageRating(ratings), status });
     }
 
-    // "пушистый ухоженный кот"s, [](int document_id, DocumentStatus status, int rating) { return document_id % 2 == 0; }
+    // string, [](document_id, status, rating) { return; }
     template <typename DocumentFilter>
     vector<Document> FindTopDocuments(const string& raw_query, DocumentFilter document_filter) const
     {
@@ -104,10 +105,7 @@ public:
             {
                 return lhs.rating > rhs.rating;
             }
-            else
-            {
-                return lhs.relevance > rhs.relevance;
-            }
+            return lhs.relevance > rhs.relevance;
         });
         if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT)
         {
@@ -121,20 +119,18 @@ public:
         return documents_.size();
     }
 
-    // "пушистый ухоженный кот"s
-    vector<Document> FindTopDocuments(const string& raw_query) const
-    {
-        return FindTopDocuments(raw_query,
-            [](int document_id, DocumentStatus status, int rating)
-                { return status == DocumentStatus::ACTUAL; });
-    }
-
-    // "пушистый ухоженный кот"s, DocumentStatus::BANNED
+    // string, status
     vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus document_status) const
     {
         return FindTopDocuments(raw_query,
             [document_status](int document_id, DocumentStatus status, int rating)
                 { return status == document_status; });
+    }
+
+    // string
+    vector<Document> FindTopDocuments(const string& raw_query) const
+    {
+        return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
     }
 
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const
@@ -202,11 +198,7 @@ private:
         {
             return 0;
         }
-        int rating_sum = 0;
-        for (const int rating : ratings)
-        {
-            rating_sum += rating;
-        }
+        int rating_sum = accumulate(ratings.begin(), ratings.end(), 0);
         return rating_sum / static_cast<int>(ratings.size());
     }
 
@@ -274,7 +266,9 @@ private:
             const double inverse_document_freq = ComputeWordInverseDocumentFreq(word);
             for (const auto [document_id, term_freq] : word_to_document_freqs_.at(word))
             {
-                if (document_filter(document_id, documents_.at(document_id).status, documents_.at(document_id).rating))
+                DocumentStatus document_status = documents_.at(document_id).status;
+                int document_rating = documents_.at(document_id).rating;
+                if (document_filter(document_id, document_status, document_rating))
                 {
                     document_to_relevance[document_id] += term_freq * inverse_document_freq;
                 }
