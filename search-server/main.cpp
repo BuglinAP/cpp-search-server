@@ -99,12 +99,9 @@ public:
     explicit SearchServer(const StringContainer& stop_words)
         : stop_words_(MakeUniqueNonEmptyStrings(stop_words))
     {
-        for (const string stop_word : stop_words)
+        if (any_of(stop_words.begin(), stop_words.end(), [](const string& stop_word){return !IsValidWord(stop_word);}))
         {
-            if (!IsValidWord(stop_word))
-            {
-                throw invalid_argument("Stop word contains invalid characters"s);
-            }
+            throw invalid_argument("Stop word contains invalid characters"s);
         }
     }
 
@@ -115,7 +112,19 @@ public:
 
     void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings)
     {
-        IsValidDocument(document_id, document);
+        if (!IsValidWord(document))
+        {
+            throw invalid_argument("Document contains invalid characters"s);
+        }
+        if (document_id < 0)
+        {
+            throw invalid_argument("Attempt to add a document with a negative id"s);
+        }
+        if (documents_.count(document_id))
+        {
+            throw invalid_argument("Attempt to add a document with the id of a previously added document"s);
+        }
+
         const vector<string> words = SplitIntoWordsNoStop(document);
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words)
@@ -130,7 +139,6 @@ public:
     template <typename DocumentFilter>
     vector<Document> FindTopDocuments(const string& raw_query, DocumentFilter document_filter) const
     {
-        IsValidQuery(raw_query);
         const Query query = ParseQuery(raw_query);
         auto matched_documents = FindAllDocuments(query, document_filter);
 
@@ -154,7 +162,7 @@ public:
     {
         return FindTopDocuments(raw_query,
             [document_status](int document_id, DocumentStatus status, int rating)
-                { return status == document_status; });
+        { return status == document_status; });
     }
 
     // string
@@ -165,7 +173,6 @@ public:
 
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const
     {
-        IsValidQuery(raw_query);
         const Query query = ParseQuery(raw_query);
         vector<string> matched_words;
         for (const string& word : query.plus_words)
@@ -229,48 +236,6 @@ private:
         });
     }
 
-    void IsValidDocument(int document_id, const string& document) const
-    {
-        if (!IsValidWord(document))
-        {
-            throw invalid_argument("Document contains invalid characters"s);
-        }
-        if (document_id < 0)
-        {
-            throw invalid_argument("Attempt to add a document with a negative id"s);
-        }
-        if (documents_.count(document_id))
-        {
-            throw invalid_argument("Attempt to add a document with the id of a previously added document"s);
-        }
-    }
-
-    void IsValidQuery(const string& query) const
-    {
-        if (!IsValidWord(query))
-        {
-            throw invalid_argument("Query contains invalid characters"s);
-        }
-        if (query[query.size() - 1] == '-')
-        {
-            throw invalid_argument("No text after the minus sign"s);
-        }
-        for (int i = 0; i < query.size(); ++i)
-        {
-            if (query[i] == '-')
-            {
-                if (query[i + 1] == '-')
-                {
-                    throw invalid_argument("More than one minus sign before the words"s);
-                }
-                if (query[i + 1] == ' ')
-                {
-                    throw invalid_argument("No text after the minus sign"s);
-                }
-            }
-        }
-    }
-
     vector<string> SplitIntoWordsNoStop(const string& text) const
     {
         vector<string> words;
@@ -321,6 +286,29 @@ private:
 
     Query ParseQuery(const string& text) const
     {
+        if (!IsValidWord(text))
+        {
+            throw invalid_argument("Query contains invalid characters"s);
+        }
+        if (text[text.size() - 1] == '-')
+        {
+            throw invalid_argument("No text after the minus sign"s);
+        }
+        for (int i = 0; i < text.size(); ++i)
+        {
+            if (text[i] == '-')
+            {
+                if (text[i + 1] == '-')
+                {
+                    throw invalid_argument("More than one minus sign before the words"s);
+                }
+                if (text[i + 1] == ' ')
+                {
+                    throw invalid_argument("No text after the minus sign"s);
+                }
+            }
+        }
+
         Query query;
         for (const string& word : SplitIntoWords(text))
         {
