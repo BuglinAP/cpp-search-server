@@ -23,18 +23,7 @@ class SearchServer
 {
 public:
     template <typename StringContainer>
-    explicit SearchServer(const StringContainer& stop_words)
-        : stop_words_(MakeUniqueNonEmptyStrings(stop_words))
-    {
-        for (const std::string stop_word : stop_words)
-        {
-            if (!IsValidWord(stop_word))
-            {
-                using namespace std;
-                throw invalid_argument("Stop word contains invalid characters"s);
-            }
-        }
-    }
+    explicit SearchServer(const StringContainer& stop_words);
 
     explicit SearchServer(const std::string& stop_words_text);
 
@@ -42,27 +31,8 @@ public:
 
     // string, [](document_id, status, rating) { return; }
     template <typename DocumentFilter>
-    std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentFilter document_filter) const
-    {
-        IsValidQuery(raw_query);
-        const Query query = ParseQuery(raw_query);
-        auto matched_documents = FindAllDocuments(query, document_filter);
-
-        sort(matched_documents.begin(), matched_documents.end(), [](const Document& lhs, const Document& rhs)
-        {
-            if (std::abs(lhs.relevance - rhs.relevance) < 1e-6)
-            {
-                return lhs.rating > rhs.rating;
-            }
-            return lhs.relevance > rhs.relevance;
-        });
-        if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT)
-        {
-            matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
-        }
-        return matched_documents;
-    }
-
+    std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentFilter document_filter) const;
+    
     // string, status
     std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentStatus document_status) const;
     
@@ -118,43 +88,84 @@ private:
     double ComputeWordInverseDocumentFreq(const std::string& word) const;
 
     template <typename DocumentFilter>
-    std::vector<Document> FindAllDocuments(const Query& query, DocumentFilter document_filter) const
-    {
-        std::map<int, double> document_to_relevance;
-        for (const std::string& word : query.plus_words)
-        {
-            if (word_to_document_freqs_.count(word) == 0)
-            {
-                continue;
-            }
-            const double inverse_document_freq = ComputeWordInverseDocumentFreq(word);
-            for (const auto [document_id, term_freq] : word_to_document_freqs_.at(word))
-            {
-                DocumentData document_at = documents_.at(document_id);
-                if (document_filter(document_id, document_at.status, document_at.rating))
-                {
-                    document_to_relevance[document_id] += term_freq * inverse_document_freq;
-                }
-            }
-        }
-
-        for (const std::string& word : query.minus_words)
-        {
-            if (word_to_document_freqs_.count(word) == 0)
-            {
-                continue;
-            }
-            for (const auto [document_id, _] : word_to_document_freqs_.at(word))
-            {
-                document_to_relevance.erase(document_id);
-            }
-        }
-
-        std::vector<Document> matched_documents;
-        for (const auto [document_id, relevance] : document_to_relevance)
-        {
-            matched_documents.push_back({ document_id, relevance, documents_.at(document_id).rating });
-        }
-        return matched_documents;
-    }
+    std::vector<Document> FindAllDocuments(const Query& query, DocumentFilter document_filter) const;
 };
+
+template <typename StringContainer>
+SearchServer::SearchServer(const StringContainer& stop_words)
+    : stop_words_(MakeUniqueNonEmptyStrings(stop_words))
+{
+    for (const std::string stop_word : stop_words)
+    {
+        if (!IsValidWord(stop_word))
+        {
+            using namespace std;
+            throw invalid_argument("Stop word contains invalid characters"s);
+        }
+    }
+}
+
+// string, [](document_id, status, rating) { return; }
+template <typename DocumentFilter>
+std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query, DocumentFilter document_filter) const
+{
+    IsValidQuery(raw_query);
+    const Query query = ParseQuery(raw_query);
+    auto matched_documents = FindAllDocuments(query, document_filter);
+
+    sort(matched_documents.begin(), matched_documents.end(), [](const Document& lhs, const Document& rhs)
+    {
+        if (std::abs(lhs.relevance - rhs.relevance) < 1e-6)
+        {
+            return lhs.rating > rhs.rating;
+        }
+        return lhs.relevance > rhs.relevance;
+    });
+    if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT)
+    {
+        matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
+    }
+    return matched_documents;
+}
+
+
+template <typename DocumentFilter>
+std::vector<Document> SearchServer::FindAllDocuments(const Query& query, DocumentFilter document_filter) const
+{
+    std::map<int, double> document_to_relevance;
+    for (const std::string& word : query.plus_words)
+    {
+        if (word_to_document_freqs_.count(word) == 0)
+        {
+            continue;
+        }
+        const double inverse_document_freq = ComputeWordInverseDocumentFreq(word);
+        for (const auto [document_id, term_freq] : word_to_document_freqs_.at(word))
+        {
+            DocumentData document_at = documents_.at(document_id);
+            if (document_filter(document_id, document_at.status, document_at.rating))
+            {
+                document_to_relevance[document_id] += term_freq * inverse_document_freq;
+            }
+        }
+    }
+
+    for (const std::string& word : query.minus_words)
+    {
+        if (word_to_document_freqs_.count(word) == 0)
+        {
+            continue;
+        }
+        for (const auto [document_id, _] : word_to_document_freqs_.at(word))
+        {
+            document_to_relevance.erase(document_id);
+        }
+    }
+
+    std::vector<Document> matched_documents;
+    for (const auto [document_id, relevance] : document_to_relevance)
+    {
+        matched_documents.push_back({ document_id, relevance, documents_.at(document_id).rating });
+    }
+    return matched_documents;
+}

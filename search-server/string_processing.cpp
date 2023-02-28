@@ -26,13 +26,3 @@ std::vector<std::string> SplitIntoWords(const std::string& text)
 
     return words;
 }
-
-std::ostream& operator<<(std::ostream& out, const Document& document)
-{
-    using namespace std::literals;
-    out << "{ "s
-        << "document_id = "s << document.id << ", "s
-        << "relevance = "s << document.relevance << ", "s
-        << "rating = "s << document.rating << " }"s;
-    return out;
-}

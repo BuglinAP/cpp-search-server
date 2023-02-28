@@ -1,13 +1,10 @@
 #pragma once
 #include "document.h"
-#include <iostream>
 #include <set>
 #include <string>
 #include <vector>
 
 std::vector<std::string> SplitIntoWords(const std::string& text);
-
-std::ostream& operator<<(std::ostream& out, const Document& document);
 
 template <typename StringContainer>
 std::set<std::string> MakeUniqueNonEmptyStrings(const StringContainer& strings)

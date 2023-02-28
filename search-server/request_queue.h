@@ -11,12 +11,7 @@ public:
     
     // Search methods to save the results for statistics
     template <typename DocumentFilter>
-    std::vector<Document> AddFindRequest(const std::string& raw_query, DocumentFilter document_filter)
-    {
-        const auto result = search_server_.FindTopDocuments(raw_query, document_filter);
-        AddRequest(result.size());
-        return result;
-    }
+    std::vector<Document> AddFindRequest(const std::string& raw_query, DocumentFilter document_filter);
     
     std::vector<Document> AddFindRequest(const std::string& raw_query, DocumentStatus status);
   
@@ -38,3 +33,12 @@ private:
 
     void AddRequest(int results_num);
 };
+
+
+template <typename DocumentFilter>
+std::vector<Document> RequestQueue::AddFindRequest(const std::string& raw_query, DocumentFilter document_filter)
+{
+    const auto result = search_server_.FindTopDocuments(raw_query, document_filter);
+    AddRequest(result.size());
+    return result;
+}
