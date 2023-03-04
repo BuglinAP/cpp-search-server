@@ -39,7 +39,11 @@ int main()
     search_server.AddDocument(9, "nasty rat with curly hair"s, DocumentStatus::ACTUAL, { 1, 2 });
 
     cout << "Before duplicates removed: "s << search_server.GetDocumentCount() << endl;
-    RemoveDuplicates(search_server);
+
+    {
+        LOG_DURATION_STREAM("RemoveDuplicates"s, std::cout);
+        RemoveDuplicates(search_server);
+    }
     cout << "After duplicates removed: "s << search_server.GetDocumentCount() << endl;
 
     system("pause");

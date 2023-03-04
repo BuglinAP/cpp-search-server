@@ -25,22 +25,22 @@ int RequestQueue::GetNoResultRequests() const
 }
 
 void RequestQueue::AddRequest(int results_num) 
+{
+    // New request - new minute
+    ++current_time_;
+    // Deleting all outtimed search results
+    while (!requests_.empty() && (min_in_day_ <= current_time_ - requests_.front().timestamp))
     {
-        // New request - new minute
-        ++current_time_;
-        // Deleting all outtimed search results
-        while (!requests_.empty() && (min_in_day_ <= current_time_ - requests_.front().timestamp))
+        if (requests_.front().results == 0)
         {
-            if (requests_.front().results == 0) 
-            {
-                --no_results_requests_;
-            }
-            requests_.pop_front();
+            --no_results_requests_;
         }
-        // Saving new search result
-        requests_.push_back({ current_time_, results_num });
-        if (results_num == 0) 
-        {
-            ++no_results_requests_;
-        }
+        requests_.pop_front();
     }
+    // Saving new search result
+    requests_.push_back({ current_time_, results_num });
+    if (results_num == 0)
+    {
+        ++no_results_requests_;
+    }
+}
