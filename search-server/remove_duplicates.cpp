@@ -5,10 +5,10 @@
 void RemoveDuplicates(SearchServer& search_server)
 {
     std::set<int> documents_to_delete;
-    std::set<std::set<std::string>>documents_words;
+    std::set<std::set<std::string_view>>documents_words;
     for (const int current_document : search_server) 
     {
-        std::set<std::string> current_words = search_server.GetDocumentWords(current_document);
+        std::set<std::string_view> current_words = search_server.GetDocumentWords(current_document);
         if (documents_words.count(current_words))
         {
             using namespace std::literals;
