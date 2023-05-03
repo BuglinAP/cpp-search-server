@@ -1,6 +1,7 @@
 #pragma once
 #include "string_processing.h"
 #include "concurrent_map.h" 
+#include "document.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -17,14 +18,6 @@
 constexpr int MAX_RESULT_DOCUMENT_COUNT = 5;
 constexpr double COMPARISON_ACCURACY = 1e-6;
 const unsigned int THREAD_COUNT = std::thread::hardware_concurrency();
-
-enum class DocumentStatus
-{
-    ACTUAL,
-    IRRELEVANT,
-    BANNED,
-    REMOVED,
-};
 
 class SearchServer
 {
@@ -64,9 +57,6 @@ public:
     std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(const ExecutionPolicy& policy,
         const std::string_view raw_query, int document_id) const;
 
-    /*std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(const std::execution::sequenced_policy&,
-        const std::string_view raw_query, int document_id) const;*/
-
     std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(const std::string_view raw_query, int document_id) const;
 
     int GetDocumentCount() const;
@@ -84,16 +74,15 @@ public:
     // int
     void RemoveDocument(int document_id);
 
-    std::set<std::string_view> GetDocumentWords(int document_id) const;
 private:
     struct DocumentData
     {
         int rating;
         DocumentStatus status;
+        std::string document_view;
     };
 
     std::set<std::string, std::less<>> stop_words_;
-    std::deque<std::string> documents_view_add_;
     std::map<std::string_view, std::map<int, double>> word_to_document_freqs_;
     std::map<int, std::map<std::string_view, double>> document_to_word_freqs_;
     std::map<int, DocumentData> documents_;
@@ -104,8 +93,6 @@ private:
     static bool IsValidWord(const std::string_view word);
 
     void IsValidDocument(int document_id, const std::string_view document) const;
-
-    void IsValidQuery(const std::string_view query) const;
 
     void IsValidId(int document_id) const;
 
@@ -128,9 +115,7 @@ private:
         std::vector<std::string_view> minus_words;
     };
 
-    Query ParseQuery(const std::string_view text) const;
-
-    Query ParseQuery(const std::string_view text, bool flag) const;
+    Query ParseQuery(const std::string_view text, bool flag = true) const;
 
     // Existence required
     double ComputeWordInverseDocumentFreq(const std::string_view word) const;
@@ -151,8 +136,8 @@ SearchServer::SearchServer(const StringContainer& stop_words)
     {
         if (!IsValidWord(stop_word))
         {
-            using namespace std;
-            throw invalid_argument("Stop word contains invalid characters"s);
+            using namespace std::string_literals;
+            throw std::invalid_argument("Stop word contains invalid characters"s);
         }
     }
 }
@@ -168,7 +153,6 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string_view raw_
 template <typename DocumentFilter, typename ExecutionPolicy>
 std::vector<Document> SearchServer::FindTopDocuments(const ExecutionPolicy& policy, const std::string_view raw_query, DocumentFilter document_filter) const
 {
-    IsValidQuery(raw_query);
     const Query query = ParseQuery(raw_query);
     auto matched_documents = FindAllDocuments(policy, query, document_filter);
     sort(policy, matched_documents.begin(), matched_documents.end(), [](const Document& lhs, const Document& rhs)
@@ -211,7 +195,6 @@ std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDoc
     {
         return MatchDocument(raw_query, document_id);
     }
-    IsValidQuery(raw_query);
     IsValidId(document_id);
     const Query query = ParseQuery(raw_query, false);
     std::vector<std::string_view> matched_words(query.plus_words.size());

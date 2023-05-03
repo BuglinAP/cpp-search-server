@@ -13,16 +13,16 @@ SearchServer::SearchServer(const std::string& stop_words_text)
 void SearchServer::AddDocument(int document_id, const std::string_view document, DocumentStatus status, const std::vector<int>& ratings)
 {
     IsValidDocument(document_id, document);
-    documents_view_add_.push_back(std::string(document));
-    const std::vector<std::string_view> words = SplitIntoWordsNoStop(std::string_view(documents_view_add_.back()));
+    documents_.emplace(document_id, DocumentData{ ComputeAverageRating(ratings), status, std::string(document) });
+    all_documents_id_.insert(document_id);
+
+    const std::vector<std::string_view> words = SplitIntoWordsNoStop(std::string_view(documents_.at(document_id).document_view));
     const double inv_word_count = 1.0 / words.size();
     for (const std::string_view word : words)
     {
         word_to_document_freqs_[word][document_id] += inv_word_count;
         document_to_word_freqs_[document_id][word] += inv_word_count;
     }
-    documents_.emplace(document_id, DocumentData{ ComputeAverageRating(ratings), status });
-    all_documents_id_.insert(document_id);
 }
 
 // execution::sep, string, status
@@ -41,7 +41,6 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string_view raw_
 
 std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDocument(const std::string_view raw_query, int document_id) const
 {
-    IsValidQuery(raw_query);
     IsValidId(document_id);
     const Query query = ParseQuery(raw_query);
     std::vector<std::string_view> matched_words;
@@ -96,17 +95,6 @@ void SearchServer::RemoveDocument(int document_id)
     RemoveDocument(std::execution::seq, document_id);
 }
 
-std::set<std::string_view> SearchServer::GetDocumentWords(int document_id) const
-{
-    std::set<std::string_view> document_words;
-    std::map<std::string_view, double> words_frequencies = GetWordFrequencies(document_id);
-    for (auto& [word, freqs] : words_frequencies)
-    {
-        document_words.insert(word);
-    }
-    return document_words;
-}
-
 // private methods
 bool SearchServer::IsStopWord(const std::string_view word) const
 {
@@ -124,54 +112,27 @@ bool SearchServer::IsValidWord(const std::string_view word)
 
 void SearchServer::IsValidDocument(int document_id, const std::string_view document) const
 {
-    using namespace std;
+    using namespace std::string_literals;
     if (!IsValidWord(document))
     {
-        throw invalid_argument("Document contains invalid characters"s);
+        throw std::invalid_argument("Document contains invalid characters"s);
     }
     if (document_id < 0)
     {
-        throw invalid_argument("Attempt to add a document with a negative id"s);
+        throw std::invalid_argument("Attempt to add a document with a negative id"s);
     }
     if (documents_.count(document_id))
     {
-        throw invalid_argument("Attempt to add a document with the id of a previously added document"s);
-    }
-}
-
-void SearchServer::IsValidQuery(const std::string_view query) const
-{
-    using namespace std;
-    if (!IsValidWord(query))
-    {
-        throw invalid_argument("Query contains invalid characters"s);
-    }
-    if (query[query.size() - 1] == '-')
-    {
-        throw invalid_argument("No text after the minus sign"s);
-    }
-    for (int i = 0; i < query.size(); ++i)
-    {
-        if (query[i] == '-')
-        {
-            if (query[i + 1] == '-')
-            {
-                throw invalid_argument("More than one minus sign before the words"s);
-            }
-            if (query[i + 1] == ' ')
-            {
-                throw invalid_argument("No text after the minus sign"s);
-            }
-        }
+        throw std::invalid_argument("Attempt to add a document with the id of a previously added document"s);
     }
 }
 
 void SearchServer::IsValidId(int document_id) const
 {
-    using namespace std;
+    using namespace std::string_literals;
     if (!documents_.count(document_id))
     {
-        throw out_of_range("Non-existent document id"s);
+        throw std::out_of_range("Non-existent document id"s);
     }
 }
 
@@ -200,6 +161,11 @@ int SearchServer::ComputeAverageRating(const std::vector<int>& ratings)
 
 SearchServer::QueryWord SearchServer::ParseQueryWord(std::string_view text) const
 {
+    if (!IsValidWord(text))
+    {
+        using namespace std::string_literals;
+        throw std::invalid_argument("Query contains invalid characters"s);
+    }
     bool is_minus = false;
     // Word shouldn't be empty
     if (text[0] == '-')
@@ -208,11 +174,6 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(std::string_view text) cons
         text = text.substr(1);
     }
     return { text, is_minus, IsStopWord(text) };
-}
-
-SearchServer::Query SearchServer::ParseQuery(const std::string_view text) const
-{
-    return ParseQuery(text, true);
 }
 
 SearchServer::Query SearchServer::ParseQuery(const std::string_view text, bool sequenced_flag) const
@@ -226,6 +187,15 @@ SearchServer::Query SearchServer::ParseQuery(const std::string_view text, bool s
         {
             if (query_word.is_minus)
             {
+                using namespace std::string_literals;
+                if (query_word.data.empty())
+                {
+                    throw std::invalid_argument("No text after the minus sign"s);
+                }
+                if (query_word.data[0] == '-')
+                {
+                    throw std::invalid_argument("More than one minus sign before the words"s);
+                }
                 query.minus_words.push_back(query_word.data);
             }
             else
